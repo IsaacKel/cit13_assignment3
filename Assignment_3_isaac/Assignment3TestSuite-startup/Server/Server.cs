@@ -103,61 +103,47 @@ public class Server
                     }
                     else if (request?.Method == "read")
                     {
-                        //Handle read method here
-                        // Check if the request path is for reading categories
-                        if (request?.Path == "/api/categories")
+                        if (request.Path == "/api/categories")
                         {
-                            // Create a list of categories to send back in the response
-                            var categories = new List<object>
-                        {
-                            new { cid = 1, name = "Beverages" },
-                            new { cid = 2, name = "Condiments" },
-                            new { cid = 3, name = "Confections" }
-                        };
-
-                            // Create the response object with status "1 Ok" and the list of categories as the body
+                            // Transform _categories into a list of objects with cid and name
+                            var categoriesList = _categories.Select(kv => new { cid = kv.Key, name = kv.Value }).ToList();
                             var response = new Response
                             {
                                 Status = "1 Ok",
-                                Body = ToJson(categories) // Assuming ToJson method serializes the object to JSON string
+                                Body = ToJson(categoriesList)
                             };
-
-                            // Serialize the response object to JSON
                             string jsonResponse = ToJson(response);
-
-                            // Log the response for debugging purposes
                             Console.WriteLine("Read response: " + jsonResponse);
-
-                            // Write the JSON response to the stream
                             WriteToStream(stream, jsonResponse);
                         }
-                        else if (request?.Path == "/api/categories/1")
+                        else if (request.Path.StartsWith("/api/categories/"))
                         {
-                            // Create a category object to send back in the response
-                            var category = new { cid = 1, name = "Beverages" };
-                            var response = new Response
+                            // Extract the category ID from the path
+                            int categoryId = int.Parse(request.Path.Split('/').Last());
+                            if (_categories.TryGetValue(categoryId, out string categoryName))
                             {
-                                Status = "1 Ok",
-                                Body = ToJson(category)
-                            };
-                            string jsonResponse = ToJson(response);
-                            Console.WriteLine("Read response: " + jsonResponse);
-                            WriteToStream(stream, jsonResponse);
-                        }
-                        else if (request?.Path == "/api/categories/123")
-                        {
-                            //Return id not found
-                            var response = new Response
+                                // Category found, return it
+                                var category = new { cid = categoryId, name = categoryName };
+                                var response = new Response
+                                {
+                                    Status = "1 Ok",
+                                    Body = ToJson(category)
+                                };
+                                string jsonResponse = ToJson(response);
+                                Console.WriteLine("Read response: " + jsonResponse);
+                                WriteToStream(stream, jsonResponse);
+                            }
+                            else
                             {
-                                Status = "5 Not Found"
-                            };
-                            string jsonResponse = ToJson(response);
-                            Console.WriteLine("Read response: " + jsonResponse);
-                            WriteToStream(stream, jsonResponse);
-                        }
-                        else
-                        {
-                            // Handle other read operations or send an appropriate error response
+                                // Category not found, return "5 Not Found"
+                                var response = new Response
+                                {
+                                    Status = "5 Not Found"
+                                };
+                                string jsonResponse = ToJson(response);
+                                Console.WriteLine("Read response: " + jsonResponse);
+                                WriteToStream(stream, jsonResponse);
+                            }
                         }
                     }
                     else if (request?.Method == "update")
@@ -168,6 +154,7 @@ public class Server
                             if (body != null && body.cid == categoryId)
                             {
                                 _categories[categoryId] = body.name;
+                                Console.WriteLine($"Updated category {categoryId} to {body.name}");
                                 var response = new Response
                                 {
                                     Status = "3 Updated",
@@ -256,7 +243,7 @@ public class Server
         {
             return; // Skip path validation for "echo" requests
         }
-        // Now we check for the presence of a resource or an invalid path
+        // check for the presence of a resource or an invalid path
         if (string.IsNullOrEmpty(request.Path))
         {
             Console.WriteLine("Resource is missing.");
@@ -318,20 +305,10 @@ public class Server
     private void ValidateResource(Request request, List<string> errors)
     {
         Console.WriteLine("Validating resource...");
-
-        // For methods like "echo" and "read", resource validation is not needed
-        if (request.Method == "echo" || request.Method == "read")
+        if (request.Method == "echo" || request.Method == "read" || request.Method == "update" || request.Method == "delete" || request.Method == "create")
         {
             return;
         }
-
-        // Skip resource validation if the method is "update" or "delete"
-        if (request.Method == "update" || request.Method == "delete" || request.Method == "create")
-        {
-            return;
-        }
-
-        // For other methods, check if the resource is missing
         if (string.IsNullOrEmpty(request.Resource))
         {
             errors.Add("missing resource");
